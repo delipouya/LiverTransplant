@@ -5,6 +5,12 @@
 
 # Tallulah: 50% mt threshold across all my samples plus >=250 detected genes
 
+
+get_folder_name <- function(input_type, input_POD) {
+  path_lists = list.files(paste0('Data/' , input_type))
+  path_lists = path_lists[grepl(pattern = input_POD, path_lists)]
+  return(path_lists)}
+
 ### loading the required libraries
 source('../RatLiver/Codes/Functions.R')
 Initialize()
@@ -14,41 +20,51 @@ MIT_CUT_OFF = 5
 LIB_SIZE_CUT_OFF = 1500
 NUM_GENES_DETECTED = 250
 
-###### merging samples based on rejection state 
-sample_state = 'S'
-input_type_list = c('S'='Syngeneic', 'R'='Rejection','T'= 'Tolerance')
-input_type = input_type_list[sample_state]
-path_10x_folders = list.files(paste0('Data/', input_type ),full.names = T)
-folder_names = list.files(paste0('Data/', input_type ))
+####### merging samples based on POD
+input_POD = 'POD7'#'POD3'
+path_10x_folders_syn = list.files(paste0('Data/Syngeneic/' ),full.names = T)
+path_10x_folders_rej = list.files(paste0('Data/Rejection/' ),full.names = T)
+path_10x_folders_tol = list.files(paste0('Data/Tolerance/' ),full.names = T)
+path_10x_folders <- c(path_10x_folders_rej, path_10x_folders_syn, path_10x_folders_tol)
+path_10x_folders = path_10x_folders[grepl(input_POD, path_10x_folders)]
 
+#folder_names = get_folder_name(input_type= 'Syngeneic', input_POD)
 
+sample_names_POD3 = c( 'R003_POD3_RAT_CST_3pr_v3',  'R009_POD3_CST',
+                 'XC116_POD3_RAT_CST_3pr_v3', 'XC130_POD3_CST',
+                 'TOL01_POD3_CST_3pr_v3', 'TOL02_POD3_CST_3pr_v3')
+
+sample_names_POD7= c('R001_POD7_RAT_CST_3pr_v3', 'R005_POD7_RAT_CST_3pr_v3',
+                     'XC121_POD7_RAT_CST_3pr_v3', 'XC125_POD7_RAT_CST_3pr_v3',
+                     'TOL03_POD7_CST_3pr_v3', 'TOL04_POD7_CST_3pr_v3')
+
+outcome_type = c('Rejection', 'Rejection', 'Syngeneic', 'Syngeneic', 'Tolerance', 'Tolerance')
+sample_names= ''
+if (input_POD=='POD3') sample_names = sample_names_POD3
+if (input_POD=='POD7') sample_names = sample_names_POD7
+sample_names
 #### naming the samples
-sample_PODs = ifelse(grepl(pattern = 'POD3',folder_names), 'POD3', 'POD7')
-pattern = 'XC'; stop = 4
-if(sample_state=='R') {pattern = 'R'; stop = 3}
-if(sample_state=='T') {pattern = 'TOL'; stop = 4}
-
-
-name_start_index = unlist(lapply(gregexpr(pattern = pattern,folder_names ) , '[[', 1))
-sample_names = sapply(1:length(folder_names), function(i) substr(folder_names[[i]], name_start_index[i], name_start_index[i]+stop))
+sample_PODs = ifelse(grepl(pattern = 'POD3',path_10x_folders), 'POD3', 'POD7')
 
 seur_raw_list = lapply(path_10x_folders, 
-                    function(input_from_10x) CreateSeuratObject(counts=Read10X(input_from_10x, gene.column = 2),
-                                                                min.cells=0,min.features=1, project = input_type))
+                       function(input_from_10x) CreateSeuratObject(counts=Read10X(input_from_10x, gene.column = 2),
+                                                                   min.cells=0,min.features=1, project = input_POD))
 
 seur_raw_list = sapply(1:length(seur_raw_list), 
                        function(i) {
+                         seur_raw_list[[i]]$state = outcome_type[i]
                          seur_raw_list[[i]]$POD = sample_PODs[i]
                          seur_raw_list[[i]]$sample_name = sample_names[i]
                          seur_raw_list[[i]]$ID = paste0(sample_names, '_', sample_PODs)[i]
                          return(seur_raw_list[[i]])
                        },simplify = F)
 
-names(seur_raw_list) = paste0(sample_names, '_', sample_PODs)
+names(seur_raw_list) = sample_names #paste0(sample_names, '_', sample_PODs)
 head(seur_raw_list[[1]])
 lapply(seur_raw_list, ncol)
 
-seur_raw <- merge(seur_raw_list[[1]], c(seur_raw_list[[2]], seur_raw_list[[3]], seur_raw_list[[4]] ), # 
+seur_raw <- merge(seur_raw_list[[1]], c(seur_raw_list[[2]], seur_raw_list[[3]], 
+                                        seur_raw_list[[4]], seur_raw_list[[5]], seur_raw_list[[6]] ), # 
                   add.cell.ids = names(seur_raw_list), 
                   project = names(seur_raw_list), 
                   merge.data = TRUE)
@@ -59,7 +75,7 @@ Idents(seur_raw) = seur_raw$ID
 ################ Choosing the QC metric thresholds #############################
 i = 1
 input_from_10x = path_10x_folders[i]
-INPUT_NAME = input_type
+INPUT_NAME = input_POD
 
 seur_genes_df <- read.delim(paste0(input_from_10x,'/features.tsv.gz'), header = F)
 seur_raw[['RNA']] <- AddMetaData(seur_raw[['RNA']], seur_genes_df$V2, col.name = 'symbol')
@@ -117,7 +133,7 @@ df = data.frame(library_size= seur_raw$nCount_RNA,
 
 #dir.create(paste0('Plots/QC/',INPUT_NAME))
 ## Visualization of QC metrics
-pdf(paste0('Plots/QC/',INPUT_NAME,'/QC_',INPUT_NAME,'_',
+pdf(paste0('Plot/',INPUT_NAME,'/QC_',INPUT_NAME,'_',
            'mito_',MIT_CUT_OFF,'_lib_',LIB_SIZE_CUT_OFF,'.pdf'))
 
 ggplot(data.frame(seur_raw$nCount_RNA), aes(seur_raw.nCount_RNA))+
@@ -191,6 +207,7 @@ MIT_CUT_OFF = 3
 LIB_SIZE_CUT_OFF = 1500
 NUM_GENES_DETECTED = 250
 
+
 #x = seur_raw_list[[1]]
 seur_raw_l <- sapply(1:length(seur_raw_list), FUN = function(i) {
   x = seur_raw_list[[i]]
@@ -207,7 +224,7 @@ seur_raw_l <- sapply(1:length(seur_raw_list), FUN = function(i) {
   qc_df$filt_frac[i] <<- (num_cells_1 - ncol(x))/num_cells_1
   
   return(x)
-  }, simplify = F)
+}, simplify = F)
 
 qc_df$num_cells_after = sapply(seur_raw_l, function(x) dim(x)[2])
 dev.off()
@@ -229,7 +246,8 @@ length(features)
 ################################################################################
 ################## Merging the datasets without/with Harmony correction ########################
 
-concat_samples <- merge(seur_norm_list[[1]], c(seur_norm_list[[2]], seur_norm_list[[3]], seur_norm_list[[4]] ), # 
+concat_samples <- merge(seur_norm_list[[1]], c(seur_norm_list[[2]], seur_norm_list[[3]], 
+                                               seur_norm_list[[4]],seur_norm_list[[5]] ,seur_norm_list[[6]]  ), # 
                         add.cell.ids = names(seur_raw_list), 
                         project = names(seur_raw_list), 
                         merge.data = TRUE)
@@ -239,9 +257,18 @@ VariableFeatures(concat_samples) = features
 
 concat_samples <- RunPCA(concat_samples, npcs = 30, verbose = FALSE, features = features) #all_common_features for varimax
 #saveRDS(concat_samples,  paste0('Objects/Integrated_',INPUT_NAME,'_mt' , MIT_CUT_OFF,'_lib', LIB_SIZE_CUT_OFF,'_all_features.rds'))
-saveRDS(concat_samples,  paste0('Objects/Integrated_',INPUT_NAME,'_mt' , MIT_CUT_OFF,'_lib', LIB_SIZE_CUT_OFF,'.rds'))
+#saveRDS(concat_samples,  paste0('Objects/Integrated_',INPUT_NAME,'_mt' , MIT_CUT_OFF,'_lib', LIB_SIZE_CUT_OFF,'.rds'))
 '~/LiverTransplant/Objects/Integrated_Syngeneic_mt3_lib1500.rds'
 
+
+####################################
+MIT_CUT_OFF = 3
+LIB_SIZE_CUT_OFF = 1500
+NUM_GENES_DETECTED = 250
+INPUT_NAME = 'POD7'#'POD7'
+
+concat_samples <- readRDS(paste0('Objects/Integrated_',INPUT_NAME,'_mt' , MIT_CUT_OFF,'_lib', LIB_SIZE_CUT_OFF,'.rds'))
+head(concat_samples)
 concat_samples <- RunHarmony(concat_samples, group.by.vars = "ID", assay.use="RNA")
 
 plot(100 * concat_samples@reductions$pca@stdev^2 / concat_samples@reductions$pca@misc$total.variance,
@@ -271,8 +298,8 @@ df_umap <- data.frame(UMAP_1=getEmb(concat_samples, 'umap')[,1],
                       sample_name=concat_samples$sample_name)
 
 markers = c('Alb', 'Apoa2', 'Apoc1', 'Sparc', 'Lyve1', 'Col3a1', 'Ecm1', 
-  'Ptprc', 'Marco', 'Lyz2',	'Vsig4', 'Cd74', 'Cd79b', 
-  'Irf8', 'Plac8', 'Gzmk', 'Gzma')
+            'Ptprc', 'Marco', 'Lyz2',	'Vsig4', 'Cd74', 'Cd79b', 
+            'Irf8', 'Plac8', 'Gzmk', 'Gzma')
 
 i = 8
 gene_name = markers[i]
@@ -304,8 +331,10 @@ gc()
 
 merged_samples$cluster = df_umap$cluster
 
-saveRDS(merged_samples, paste0('Objects/Integrated_',INPUT_NAME,'_mt' , MIT_CUT_OFF,'_lib', LIB_SIZE_CUT_OFF,'_harmony.rds'))
+saveRDS(merged_samples, paste0('Objects/Integrated_',INPUT_NAME,'_mt', 
+                               MIT_CUT_OFF,'_lib', LIB_SIZE_CUT_OFF,'_harmony.rds'))
 head(colnames(merged_samples))
+
 
 
 

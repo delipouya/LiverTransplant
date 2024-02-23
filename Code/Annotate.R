@@ -27,6 +27,8 @@ merged_samples = readRDS('Objects/Integrated_Syngeneic_mt5_lib1500_harmony.rds')
 merged_samples = readRDS('Objects/Integrated_Rejection_mt15_lib1500_harmony.rds')
 merged_samples = readRDS('Objects/Integrated_Tolerance_mt15_lib1500_harmony.rds')
 
+
+merged_samples = readRDS('~/rat_sham_sn_data/sham_singleNuc_merged.rds')
 ### converting the seurat object to singleCellExperiment
 merged_samples.sce = as.SingleCellExperiment(merged_samples)
 rowData(merged_samples.sce)$feature_symbol = rownames(merged_samples.sce)
@@ -34,7 +36,7 @@ rowData(merged_samples.sce)$feature_symbol = rownames(merged_samples.sce)
 
 ############ generating the reference data ############
 new_data_scCLustViz_object <- "~/RatLiver/Results/new_samples/scClustVizObj/for_scClustViz_newSamples_MTremoved_labelCor.RData"
-old_data_scClustViz_object <- "Results/old_samples/for_scClustViz_mergedOldSamples_mt40_lib1500_MTremoved.RData"
+old_data_scClustViz_object <- "~/RatLiver/Results/old_samples/for_scClustViz_mergedOldSamples_mt40_lib1500_MTremoved.RData"
 
 #########
 load(new_data_scCLustViz_object)
@@ -97,9 +99,10 @@ df_umap <- data.frame(UMAP_1=getEmb(merged_samples, 'umap')[,1],
                       UMAP_2=getEmb(merged_samples, 'umap')[,2], 
                       library_size= merged_samples$nCount_RNA, 
                       n_expressed=merged_samples$nFeature_RNA,
-                      POD=merged_samples$POD,
-                      ID= merged_samples$ID,
-                      cluster=merged_samples$RNA_snn_res.0.6, ### check if the resolution is set up correctly
+                      #POD=merged_samples$POD,
+                      #ID= merged_samples$ID,
+                      #cluster=merged_samples$RNA_snn_res.0.6, ### check if the resolution is set up correctly
+                      cluster=merged_samples$
                       sample_name=merged_samples$sample_name,
                       umi=colnames(merged_samples))
 
@@ -124,6 +127,7 @@ mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols) #Pastel1
 merged_samples <- FindNeighbors(merged_samples, reduction = "harmony", dims = 1:30)
 merged_samples <- FindClusters(merged_samples, resolution = 0.4)
 df_umap$cluster = merged_samples$RNA_snn_res.0.4
+df_umap$cluster = merged_samples$SCT_snn_res.0.8
 
 ggplot(df_umap, aes(x=UMAP_1, y=UMAP_2, color=cluster))+geom_point(size=1,alpha=0.6)+
   theme_bw()+scale_color_manual(values = c(mycolors)) #colorPalatte
